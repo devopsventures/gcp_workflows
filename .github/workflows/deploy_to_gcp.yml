@@ -1,0 +1,63 @@
+name: Deploy to GCP
+
+#
+# A Workflow that will deploy a container that has been pushed to a GCR inside a GCP Project using CloudRun.
+#
+
+on:
+  workflow_dispatch:
+    inputs:
+      gcp_region:
+        description: GCP region
+        required: true
+        default: europe-west1
+
+      container:
+        decription: Container Name
+        required: true
+        default: pm-demo
+
+      version:
+        description: Image Tag
+        required: true
+        default: 1.0.0-72714369
+
+      cloud_app_name:
+        description: Cloud App Name
+        required: true
+        default: pm-demo
+
+jobs:
+  deploy_to_cloud_run:
+    name: Deploy to GCP Cloud Run
+
+    runs-on: ubuntu-20.04
+
+    env:
+      GCR_CONTAINER_IMAGE: eu.gcr.io/${{ secrets.GCP_PROJECT_ID }}/pm-demo:${{ github.event.inputs.version }}
+
+    steps:
+      # Logging in using an Action provided by GCP
+      - name: Log in to gcloud
+        uses: GoogleCloudPlatform/github-actions/setup-gcloud@0.1.3
+        with:
+          version: 303.0.0
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_CONTAINERS_SERVICE_ACCOUNT_KEY }}
+
+      # Deploy using Cloud Run (don't need to specify project as it was registerd above)
+      - name: Deploy to GCP Cloud Run
+        shell: bash
+        run: |
+          gcloud run deploy \
+            ${{ github.event.inputs.cloud_app_name }} \
+            --platform managed \
+            --region ${{ github.event.inputs.gcp_region }} \
+            --image $GCR_CONTAINER_IMAGE
+
+          gcloud run services add-iam-policy-binding ${{ github.event.inputs.cloud_app_name }} \
+            --platform managed \
+            --region ${{ github.event.inputs.gcp_region }} \
+            --member="allUsers" \
+            --role="roles/run.invoker"
+       
